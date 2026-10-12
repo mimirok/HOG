@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>향온곡 연구 데이터랩 - 박사학위논문 전용</title>
+<title>향온곡 연구 데이터랩 </title>
 
 <!-- 캡처, PDF, 엑셀 라이브러리 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -18,9 +18,9 @@
     --ink: #1f2937;
     --mute: #6b7280;
     --line: #e5e7eb;
-    --acc: #1e40af;       /* 학술 네이비 블루 */
+    --acc: #1e40af;
     --acc-dark: #1e3a8a;
-    --sub: #047857;       /* 에메랄드 그린 */
+    --sub: #047857;
     --c1: #d97706; --c2: #4b5563; --c3: #2563eb; --c4: #059669;
   }
 
@@ -104,7 +104,6 @@
 <div id="capture-loading">연구 리포트 생성 중...</div>
 <div class="wrap" id="app"></div>
 
-<!-- JSON 복원 파일 인풋 -->
 <input type="file" id="backup-file-input" accept=".json" style="display:none" onchange="appImportBackupFile(event)">
 
 <script>
@@ -113,7 +112,6 @@ let view = { page: 'list', id: null, tab: 'protocol', chartFilter: 'all' };
 
 const KEY = 'hyangon-thesis-lab-v1';
 
-// 6대 문헌 프리셋 (800g 프레스 규격)
 const PRESETS = {
   '규곤시의방': {
     author: '빙허각 이씨', year: '1670년경',
@@ -194,7 +192,6 @@ const cur = () => db.find(b => b.id === view.id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const f = (n, d = 2) => Number.isFinite(+n) ? (+n).toFixed(d) : '-';
 
-/* 차트 렌더러 */
 function chart(b){
   const filter = view.chartFilter || 'all';
   const L = (b.logs || []).filter(l => l.temp !== '' || l.room !== '' || l.hum !== '');
@@ -265,7 +262,6 @@ function chart(b){
   `;
 }
 
-/* 탭 1: 배합비 및 프로토콜 */
 function protocolView(b){
   const p = PRESETS[b.textName] || {};
   const rc = b.recipe || {};
@@ -274,6 +270,7 @@ function protocolView(b){
 
   const totalGrain = grains.reduce((a, g) => a + (+g.amt || 0), 0);
   const totalDry = totalGrain + (+mung.amt || 0);
+  const safeMungMethod = mung.method ? mung.method : ((p.mung && p.mung.method) ? p.mung.method : '');
 
   return `
     <div class="card" style="border-left: 4px solid var(--acc)">
@@ -284,8 +281,8 @@ function protocolView(b){
       <div style="font-size:13px;margin-top:4px">저자: <b>${p.author || '미상'}</b></div>
       <div style="font-size:12.5px;color:var(--mute);margin:4px 0">${p.desc || ''}</div>
       <div style="background:var(--bg);padding:8px 10px;border-radius:6px;font-size:12px;margin-top:6px">
-        • 800g 프레스 기준 배합: <b>${p.grainRatio}</b> + <b>${p.mungRatio}</b><br>
-        • 녹두 처리 방식: <b>${mung.method || p.mung?.method || ''}</b>
+        • 800g 프레스 기준 배합: <b>${p.grainRatio || ''}</b> + <b>${p.mungRatio || ''}</b><br>
+        • 녹두 처리 방식: <b>${safeMungMethod}</b>
       </div>
     </div>
 
@@ -327,7 +324,6 @@ function protocolView(b){
   `;
 }
 
-/* 탭 2: 배양 환경일지 */
 function labJournalView(b){
   const sortedLogs = (b.logs || []).slice().sort((x, y) => y.d.localeCompare(x.d));
   return `
@@ -379,7 +375,6 @@ function labJournalView(b){
   `;
 }
 
-/* 탭 3: 분석 데이터 */
 function analysisView(b){
   const as = b.assay || {};
   return `
@@ -753,8 +748,8 @@ window.appExportSPSSExcel = function(){
     const p = PRESETS[b.textName] || {};
 
     spssData.push([
-      b.id, b.textName, b.rep, p.grainRatio || '', rc.mung?.method || '',
-      (rc.grains||[]).reduce((a,g)=>a+(+g.amt||0),0), rc.mung?.amt || '', rc.water || '',
+      b.id, b.textName, b.rep, p.grainRatio || '', (rc.mung && rc.mung.method) ? rc.mung.method : '',
+      (rc.grains||[]).reduce((a,g)=>a+(+g.amt||0),0), (rc.mung && rc.mung.amt) ? rc.mung.amt : '', rc.water || '',
       as.alphaAmy !== '' ? as.alphaAmy : '', as.betaAmy !== '' ? as.betaAmy : '',
       as.glucoAmy !== '' ? as.glucoAmy : '', as.spVal !== '' ? as.spVal : '',
       as.moisture !== '' ? as.moisture : '', as.ph !== '' ? as.ph : '',
