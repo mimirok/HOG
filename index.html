@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>향온곡 연구 데이터랩 - 박사학위논문 전용</title>
+
+<!-- 캡처, PDF, 엑셀 라이브러리 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+  :root {
+    box-sizing: border-box;
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --mute: #6b7280;
+    --line: #e5e7eb;
+    --acc: #1e40af;       /* 학술 네이비 블루 */
+    --acc-dark: #1e3a8a;
+    --sub: #047857;       /* 에메랄드 그린 */
+    --c1: #d97706; --c2: #4b5563; --c3: #2563eb; --c4: #059669;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111827; --card: #1f2937; --ink: #f9fafb; --line: #374151;
+      --acc: #3b82f6; --acc-dark: #2563eb; --mute: #9ca3af; --sub: #10b981;
+    }
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Pretendard", "Noto Sans KR", sans-serif;
+    line-height: 1.5; padding: 14px;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; min-height: 90vh; }
+  h1 { font-size: 20px; margin: 4px 0 2px; font-weight: 700; color: var(--acc); }
+  h2 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+  .sub, .mute { color: var(--mute); font-size: 13px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    position: relative;
+  }
+  .card.clickable { cursor: pointer; transition: transform 0.08s ease, background 0.08s ease; }
+  .card.clickable:active { transform: scale(0.98); background: #f3f4f6; }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .row > * { flex: 1; min-width: 75px; }
+
+  button {
+    font: inherit; border: 1px solid var(--line); background: var(--card);
+    color: var(--ink); border-radius: 8px; padding: 9px 12px; cursor: pointer;
+    touch-action: manipulation; transition: transform 0.06s ease, filter 0.06s ease;
+    user-select: none; display: inline-flex; justify-content: center; align-items: center;
+  }
+  button:active { transform: scale(0.94); filter: brightness(0.9); }
+  button.p { background: var(--acc); color: #fff; border-color: var(--acc); font-weight: 600; }
+  button.p:active { background: var(--acc-dark); }
+  button.g { border: none; color: var(--mute); background: none; padding: 4px 6px; cursor: pointer; }
+  button.excel-btn { background: #107c41; color: #fff; border-color: #0b5a2f; font-weight: 600; font-size: 12px; }
+
+  input, select, textarea {
+    font: inherit; width: 100%; padding: 7px 9px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 13px;
+  }
+  label { font-size: 12px; color: var(--mute); display: block; margin: 5px 0 2px; font-weight: 500; }
+
+  .tag { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 99px; background: var(--acc); color: #fff; margin-right: 4px; font-weight: 600; }
+  .tag.rep { background: var(--sub); }
+  .tag.d { background: var(--mute); }
+
+  .tabs { display: flex; gap: 6px; margin: 12px 0; }
+  .tabs button { flex: 1; font-weight: 600; padding: 9px 6px; font-size: 13px; }
+  .tabs button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 6px; }
+  th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color:
