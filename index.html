@@ -3,9 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>향온곡 연구 데이터랩</title>
+<title>향온곡 연구 데이터랩 - 고조리서 문헌 기반</title>
 
-<!-- 캡처, PDF, 엑셀 라이브러리 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,24 +12,16 @@
 <style>
   :root {
     box-sizing: border-box;
-    --bg: #f4f6f8;
-    --card: #ffffff;
-    --ink: #1f2937;
-    --mute: #6b7280;
-    --line: #e5e7eb;
-    --acc: #1e40af;
-    --acc-dark: #1e3a8a;
-    --sub: #047857;
+    --bg: #f4f6f8; --card: #ffffff; --ink: #1f2937; --mute: #6b7280; --line: #e5e7eb;
+    --acc: #1e40af; --acc-dark: #1e3a8a; --sub: #047857;
     --c1: #d97706; --c2: #4b5563; --c3: #2563eb; --c4: #059669;
   }
-
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #111827; --card: #1f2937; --ink: #f9fafb; --line: #374151;
       --acc: #3b82f6; --acc-dark: #2563eb; --mute: #9ca3af; --sub: #10b981;
     }
   }
-
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
@@ -44,11 +35,11 @@
 
   .card {
     background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-    position: relative;
+    padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); position: relative;
   }
-  .card.clickable { cursor: pointer; transition: transform 0.08s ease, background 0.08s ease; }
-  .card.clickable:active { transform: scale(0.98); background: #f3f4f6; }
+  .card.clickable { cursor: pointer; transition: transform 0.08s ease, filter 0.08s ease; }
+  .card.clickable:active { transform: scale(0.98); filter: brightness(0.95); }
+  .card.book-card { border-left: 5px solid var(--acc); padding: 18px 16px; }
 
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
   .row > * { flex: 1; min-width: 75px; }
@@ -64,6 +55,7 @@
   button.p:active { background: var(--acc-dark); }
   button.g { border: none; color: var(--mute); background: none; padding: 4px 6px; cursor: pointer; }
   button.excel-btn { background: #107c41; color: #fff; border-color: #0b5a2f; font-weight: 600; font-size: 12px; }
+  .edit-btn { font-size: 12px; padding: 3px 8px; }
 
   input, select, textarea {
     font: inherit; width: 100%; padding: 7px 9px; border: 1px solid var(--line);
@@ -83,13 +75,17 @@
   th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); }
   th:first-child, td:first-child { text-align: left; }
   th { color: var(--mute); font-weight: 600; background: var(--bg); }
-  
-  .item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 13px; border-bottom: 1px dashed var(--line); }
-  .item:last-child { border-bottom: none; }
+
   .log { border-top: 1px solid var(--line); padding: 9px 0; }
   .log:first-child { border: none; }
   .log-img { max-width: 100%; max-height: 180px; border-radius: 8px; margin-top: 6px; object-fit: cover; border: 1px solid var(--line); }
   .chart text { fill: var(--mute); font-size: 9px; }
+
+  .chart-filter-box { display: flex; gap: 6px; margin-bottom: 6px; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--mute); cursor: pointer; }
+  .chip.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+  .leg { display: flex; gap: 12px; font-size: 11px; color: var(--mute); margin-top: 4px; }
+  .leg i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
 
   #capture-area { padding: 4px; border-radius: 14px; box-sizing: border-box; }
   #capture-area.export-mode { padding: 24px 18px !important; background-color: var(--bg) !important; }
@@ -101,754 +97,646 @@
 </style>
 </head>
 <body>
-<div id="capture-loading">연구 리포트 생성 중...</div>
+<div id="capture-loading">작업 처리 중...</div>
 <div class="wrap" id="app"></div>
 
 <input type="file" id="backup-file-input" accept=".json" style="display:none" onchange="appImportBackupFile(event)">
 
 <script>
-let db = [];
-let view = { page: 'list', id: null, tab: 'protocol', chartFilter: 'all' };
-
-const KEY = 'hyangon-thesis-lab-v1';
-
-const PRESETS = {
-  '규곤시의방': {
-    author: '빙허각 이씨', year: '1670년경',
-    grainRatio: '통밀 443g + 통보리 352g',
-    mungRatio: '녹두 4g (삶아서 사용)',
-    baseGrains: [{ name: '통밀', amt: 443 }, { name: '통보리', amt: 352 }],
-    mung: { name: '녹두', amt: 4, method: '가열(삶아서 통째/으깸)' },
-    recWater: 180,
-    desc: '통밀:통보리:녹두 낟알 형태 배합비 유지. 삶은 녹두 첨가.'
-  },
-  '음식디미방': {
-    author: '안동장씨', year: '1670년경',
-    grainRatio: '밀가루 791g',
-    mungRatio: '빻은 녹두 9g (삶아서 빻음)',
-    baseGrains: [{ name: '밀가루(체에 치지 않음)', amt: 791 }],
-    mung: { name: '빻은 녹두', amt: 9, method: '삶아서 빻아 반죽 혼화' },
-    recWater: 200,
-    desc: '밀가루 단독 주원료. 체에 치지 않은 거친 가루 사용.'
-  },
-  '고사촬요·임원십육지': {
-    author: '어숙권/서유구', year: '1554·1835년',
-    grainRatio: '통보리 711g',
-    mungRatio: '녹두 89g (불린 후 맷돌 즙액화)',
-    baseGrains: [{ name: '통보리', amt: 711 }],
-    mung: { name: '녹두(건조기준)', amt: 89, method: '불려서 맷돌에 갈아 비가열 즙액(녹두물) 반죽' },
-    recWater: 0,
-    desc: '유일하게 녹두를 가열하지 않고 생즙(두유 형태)으로 짜서 보리 반죽.'
-  },
-  '고사십이집': {
-    author: '서명응', year: '1768년',
-    grainRatio: '보릿가루 789g',
-    mungRatio: '부순 녹두 11g (삶아서 부숨)',
-    baseGrains: [{ name: '보릿가루(체에 치지 않음)', amt: 789 }],
-    mung: { name: '부순 녹두', amt: 11, method: '삶아서 부숴 혼화' },
-    recWater: 195,
-    desc: '보릿가루 단독 주원료. 체에 치지 않고 사용.'
-  },
-  '임원경제지': {
-    author: '서유구', year: '1835년경',
-    grainRatio: '보릿가루 789g',
-    mungRatio: '부순 녹두 11g (삶아서 부숨)',
-    baseGrains: [{ name: '보릿가루(체에 치지 않음)', amt: 789 }],
-    mung: { name: '부순 녹두', amt: 11, method: '삶아서 부숴 혼화' },
-    recWater: 195,
-    desc: '고사십이집 제법과 동일 구성. 조선 후기 조리서.'
-  },
-  '서울 향온주곡(대조군)': {
-    author: '박록담 전승본', year: '현대',
-    grainRatio: '통밀 380g + 통보리 380g',
-    mungRatio: '녹두 40g (침지 및 분쇄)',
-    baseGrains: [{ name: '통밀', amt: 380 }, { name: '통보리', amt: 380 }],
-    mung: { name: '녹두', amt: 40, method: '침지 후 분쇄 혼화' },
-    recWater: 190,
-    desc: '현대 무형문화재 해석본 비교군.'
+window.onerror = function(msg, url, line) {
+  const app = document.getElementById('app');
+  if(app) {
+    app.innerHTML = `<div style="padding:20px; color:#d9534f; background:#fdf0f0; border:1px solid #d9534f; border-radius:8px;">
+      <b>실행 중 오류 발생</b><br>내용: ${msg}<br>줄 번호: ${line}<br>* 코드가 끝까지 복사되었는지 확인해 주세요.
+    </div>`;
   }
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
-const dayN = (s, d = today()) => Math.round((new Date(d) - new Date(s)) / 864e5);
+try {
+  let db = [];
+  let view = { page: 'home', bookKey: null, id: null, tab: 'protocol', chartFilter: 'all' };
+  const KEY = 'hyangon-thesis-lab-v2';
 
-function loadDB(){
-  try {
-    const r = localStorage.getItem(KEY);
-    if(r) return JSON.parse(r);
-  } catch(e) {}
-  return [];
-}
-
-function saveDB(){
-  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e) {}
-}
-
-db = loadDB();
-
-const $ = s => document.querySelector(s);
-const v = id => { const el = $('#' + id); return el ? el.value : ''; };
-const cur = () => db.find(b => b.id === view.id);
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const f = (n, d = 2) => Number.isFinite(+n) ? (+n).toFixed(d) : '-';
-
-function chart(b){
-  const filter = view.chartFilter || 'all';
-  const L = (b.logs || []).filter(l => l.temp !== '' || l.room !== '' || l.hum !== '');
-  if(L.length < 2) return '<p class="mute">배양 환경 기록이 2개 이상 쌓이면 그래프가 표시됩니다.</p>';
-
-  const W = 320, H = 175, pl = 30, pr = 32, pt = 22, pb = 24;
-  const iw = W - pl - pr, ih = H - pt - pb;
-
-  const days = L.map(l => dayN(b.makeDate, l.d));
-  const d0 = Math.min(...days), d1 = Math.max(...days);
-  const dx = (d1 - d0) || 1;
-  const X = d => pl + ((d - d0) / dx) * iw;
-
-  let tv = [];
-  if(filter === 'temp') tv = L.map(l => l.temp).filter(x => x !== '' && x != null).map(Number);
-  else if(filter === 'room') tv = L.map(l => l.room).filter(x => x !== '' && x != null).map(Number);
-  else tv = L.flatMap(l => [l.temp, l.room]).filter(x => x !== '' && x != null).map(Number);
-
-  const t0 = tv.length ? Math.floor(Math.min(...tv) - 1) : 15;
-  const t1 = tv.length ? Math.ceil(Math.max(...tv) + 1) : 42;
-  const YT = y => pt + ih - ((+y - t0) / (t1 - t0 || 1)) * ih;
-  const YR = y => pt + ih - ((+y - 30) / (70)) * ih;
-
-  const line = (key, YFunc, col, dash) => {
-    const pts = L.map((l, i) => (l[key] !== '' && l[key] != null) ? [X(days[i]), YFunc(+l[key]), l] : null).filter(Boolean);
-    if(!pts.length) return '';
-    const pathStr = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-    const dots = pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="${col}"><title>${p[2].d}: ${p[2][key]}</title></circle>`).join('');
-    return `<polyline points="${pathStr}" fill="none" stroke="${col}" stroke-width="2" ${dash ? 'stroke-dasharray="3 3"' : ''}/>${dots}`;
+  const PRESETS = {
+    '규곤시의방': {
+      author: '빙허각 이씨', year: '1670년경',
+      grainRatio: '통밀 443g + 통보리 352g',
+      mungRatio: '녹두 4g (삶아서 사용)',
+      baseGrains: [{ name: '통밀', amt: 443 }, { name: '통보리', amt: 352 }],
+      mung: { name: '녹두', amt: 4, method: '가열(삶아서 통째/으깸)' },
+      recWater: 180,
+      desc: '통밀과 통보리를 혼합하는 고전적 방식. 녹두는 소량 가열하여 첨가.'
+    },
+    '음식디미방': {
+      author: '안동장씨', year: '1670년경',
+      grainRatio: '밀가루 791g',
+      mungRatio: '빻은 녹두 9g (삶아서 빻음)',
+      baseGrains: [{ name: '밀가루(거친가루)', amt: 791 }],
+      mung: { name: '빻은 녹두', amt: 9, method: '삶아서 빻아 반죽 혼화' },
+      recWater: 200,
+      desc: '밀가루 단독 주원료 사용. 체에 치지 않은 거친 가루.'
+    },
+    '고사촬요·임원십육지': {
+      author: '어숙권/서유구', year: '1554·1835년',
+      grainRatio: '통보리 711g',
+      mungRatio: '건조녹두 89g (불린 후 생즙화)',
+      baseGrains: [{ name: '통보리', amt: 711 }],
+      mung: { name: '녹두 즙액', amt: 89, method: '불려서 맷돌에 갈아 비가열 생즙 반죽' },
+      recWater: 0,
+      desc: '가열 공정 없이 녹두 생즙(두유형태)으로 보리를 반죽하는 특징적 방식.'
+    },
+    '고사십이집': {
+      author: '서명응', year: '1768년',
+      grainRatio: '보릿가루 789g',
+      mungRatio: '부순 녹두 11g (삶아서 부숨)',
+      baseGrains: [{ name: '보릿가루(거친가루)', amt: 789 }],
+      mung: { name: '부순 녹두', amt: 11, method: '삶아서 부숴 혼화' },
+      recWater: 195,
+      desc: '보릿가루 단독 주원료. 고사촬요와 달리 녹두를 가열 처리함.'
+    },
+    '임원경제지': {
+      author: '서유구', year: '1835년경',
+      grainRatio: '보릿가루 789g',
+      mungRatio: '부순 녹두 11g (삶아서 부숨)',
+      baseGrains: [{ name: '보릿가루(거친가루)', amt: 789 }],
+      mung: { name: '부순 녹두', amt: 11, method: '삶아서 부숴 혼화' },
+      recWater: 195,
+      desc: '고사십이집의 배합을 계승한 조선 후기 조리서.'
+    },
+    '서울 향온주곡(대조군)': {
+      author: '박록담 전승본', year: '현대',
+      grainRatio: '통밀 380g + 통보리 380g',
+      mungRatio: '녹두 40g (침지 및 분쇄)',
+      baseGrains: [{ name: '통밀', amt: 380 }, { name: '통보리', amt: 380 }],
+      mung: { name: '녹두', amt: 40, method: '침지 후 분쇄 혼화' },
+      recWater: 190,
+      desc: '현대 무형문화재 해석본. 비교 대조군으로 활용.'
+    }
   };
 
-  let grid = '';
-  for(let i = 0; i <= 3; i++){
-    const y = pt + (ih * i) / 3;
-    const tVal = Math.round(t1 - ((t1 - t0) * i) / 3);
-    const rVal = Math.round(100 - (70 * i) / 3);
-    grid += `<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)"/>
-             <text x="${pl-4}" y="${y+3}" text-anchor="end">${tVal}°</text>
-             <text x="${W-pr+4}" y="${y+3}">${rVal}%</text>`;
+  const today = () => new Date().toISOString().slice(0, 10);
+  const dayN = (s, d = today()) => Math.round((new Date(d) - new Date(s)) / 864e5);
+
+  function loadDB(){
+    try {
+      const r = localStorage.getItem(KEY);
+      if(r) { const parsed = JSON.parse(r); if(Array.isArray(parsed)) return parsed; }
+    } catch(e) {}
+    return [];
+  }
+  function saveDB(){
+    try { localStorage.setItem(KEY, JSON.stringify(db)); }
+    catch(e) { alert('저장 실패: 저장 공간이 부족할 수 있습니다. 💾 백업 후 사진을 줄여 주세요.'); }
+  }
+  db = loadDB();
+
+  const $ = s => document.querySelector(s);
+  const v = id => { const el = $('#' + id); return el ? el.value : ''; };
+  const cur = () => db.find(b => b.id === view.id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const f = (n, d = 2) => Number.isFinite(+n) ? (+n).toFixed(d) : '-';
+
+  function chart(b){
+    const filter = view.chartFilter || 'all';
+    const L = (b.logs || []).filter(l => l.temp !== '' || l.room !== '' || l.hum !== '');
+    if(L.length < 2) return '<p class="mute" style="font-size:12px;padding:10px 0;">측정 기록이 2개 이상일 때 그래프가 표시됩니다.</p>';
+
+    const W = 320, H = 175, pl = 30, pr = 32, pt = 22, pb = 24;
+    const iw = W - pl - pr, ih = H - pt - pb;
+    const days = L.map(l => dayN(b.makeDate, l.d));
+    const d0 = Math.min(...days), d1 = Math.max(...days);
+    const dx = (d1 - d0) || 1;
+    const X = d => pl + ((d - d0) / dx) * iw;
+
+    let tv = [];
+    if(filter === 'temp') tv = L.map(l => l.temp).filter(x => x !== '' && x != null).map(Number);
+    else if(filter === 'room') tv = L.map(l => l.room).filter(x => x !== '' && x != null).map(Number);
+    else tv = L.flatMap(l => [l.temp, l.room]).filter(x => x !== '' && x != null).map(Number);
+
+    const t0 = tv.length ? Math.floor(Math.min(...tv) - 1) : 15;
+    const t1 = tv.length ? Math.ceil(Math.max(...tv) + 1) : 42;
+    const YT = y => pt + ih - ((+y - t0) / (t1 - t0 || 1)) * ih;
+    const YR = y => pt + ih - ((+y - 30) / (70)) * ih;
+
+    const line = (key, YFunc, col, dash) => {
+      const pts = L.map((l, i) => (l[key] !== '' && l[key] != null) ? [X(days[i]), YFunc(+l[key]), l] : null).filter(Boolean);
+      if(!pts.length) return '';
+      const pathStr = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+      const dots = pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="${col}"><title>${p[2].d}: ${p[2][key]}</title></circle>`).join('');
+      return `<polyline points="${pathStr}" fill="none" stroke="${col}" stroke-width="2" ${dash ? 'stroke-dasharray="3 3"' : ''}/>${dots}`;
+    };
+
+    let grid = '';
+    for(let i = 0; i <= 3; i++){
+      const y = pt + (ih * i) / 3;
+      const tVal = Math.round(t1 - ((t1 - t0) * i) / 3);
+      const rVal = Math.round(100 - (70 * i) / 3);
+      grid += `<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="var(--line)"/>
+               <text x="${pl-4}" y="${y+3}" text-anchor="end">${tVal}°</text>
+               <text x="${W-pr+4}" y="${y+3}">${rVal}%</text>`;
+    }
+    const stepDay = Math.max(1, Math.ceil((d1 - d0 + 1) / 5));
+    for(let d = d0; d <= d1; d += stepDay){
+      grid += `<text x="${X(d)}" y="${H-8}" text-anchor="middle">D+${d}</text>`;
+    }
+
+    let linesHtml = '';
+    if(filter === 'all' || filter === 'room') linesHtml += line('room', YT, 'var(--mute)', true);
+    if(filter === 'all' || filter === 'temp') linesHtml += line('temp', YT, 'var(--acc)', false);
+    if(filter === 'all' || filter === 'hum')  linesHtml += line('hum',  YR, 'var(--c3)', false);
+
+    return `
+      <div class="chart-filter-box no-export">
+        <span class="chip ${filter==='all'?'on':''}" onclick="appSetChartFilter('all')">전체</span>
+        <span class="chip ${filter==='temp'?'on':''}" onclick="appSetChartFilter('temp')">품온</span>
+        <span class="chip ${filter==='room'?'on':''}" onclick="appSetChartFilter('room')">실온</span>
+        <span class="chip ${filter==='hum'?'on':''}" onclick="appSetChartFilter('hum')">습도</span>
+      </div>
+      <svg class="chart" viewBox="0 0 ${W} ${H}" width="100%">${grid}${linesHtml}</svg>
+      <div class="leg">
+        <span><i style="background:var(--acc)"></i>품온(°C)</span>
+        <span><i style="background:var(--mute)"></i>실온(°C)</span>
+        <span><i style="background:var(--c3)"></i>습도(%)</span>
+      </div>
+    `;
   }
 
-  const stepDay = Math.max(1, Math.ceil((d1 - d0 + 1) / 5));
-  for(let d = d0; d <= d1; d += stepDay){
-    grid += `<text x="${X(d)}" y="${H-8}" text-anchor="middle">D+${d}</text>`;
-  }
+  function protocolView(b){
+    const p = PRESETS[b.textName] || {};
+    const rc = b.recipe || {};
+    const grains = rc.grains || [];
+    const mung = rc.mung || {};
+    const totalGrain = grains.reduce((a, g) => a + (+g.amt || 0), 0);
+    const totalDry = totalGrain + (+mung.amt || 0);
 
-  let linesHtml = '';
-  if(filter === 'all' || filter === 'room') linesHtml += line('room', YT, 'var(--mute)', true);
-  if(filter === 'all' || filter === 'temp') linesHtml += line('temp', YT, 'var(--acc)', false);
-  if(filter === 'all' || filter === 'hum')  linesHtml += line('hum',  YR, 'var(--c3)', false);
-
-  return `
-    <div class="chart-filter-box no-export">
-      <span class="chip ${filter==='all'?'on':''}" onclick="appSetChartFilter('all')">전체</span>
-      <span class="chip ${filter==='temp'?'on':''}" onclick="appSetChartFilter('temp')">품온</span>
-      <span class="chip ${filter==='room'?'on':''}" onclick="appSetChartFilter('room')">실온</span>
-      <span class="chip ${filter==='hum'?'on':''}" onclick="appSetChartFilter('hum')">습도</span>
-    </div>
-    <svg class="chart" viewBox="0 0 ${W} ${H}" width="100%">
-      ${grid}
-      ${linesHtml}
-    </svg>
-    <div class="leg">
-      <span><i style="background:var(--acc)"></i>품온(°C)</span>
-      <span><i style="background:var(--mute)"></i>실온(°C)</span>
-      <span><i style="background:var(--c3)"></i>습도(%)</span>
-    </div>
-  `;
-}
-
-function protocolView(b){
-  const p = PRESETS[b.textName] || {};
-  const rc = b.recipe || {};
-  const grains = rc.grains || [];
-  const mung = rc.mung || {};
-
-  const totalGrain = grains.reduce((a, g) => a + (+g.amt || 0), 0);
-  const totalDry = totalGrain + (+mung.amt || 0);
-  const safeMungMethod = mung.method ? mung.method : ((p.mung && p.mung.method) ? p.mung.method : '');
-
-  return `
-    <div class="card" style="border-left: 4px solid var(--acc)">
-      <div style="display:flex;justify-content:space-between">
-        <b>📜 [${esc(b.textName)}] 고조리서 문헌 표준 근거</b>
-        <span class="mute">${p.year || ''}</span>
-      </div>
-      <div style="font-size:13px;margin-top:4px">저자: <b>${p.author || '미상'}</b></div>
-      <div style="font-size:12.5px;color:var(--mute);margin:4px 0">${p.desc || ''}</div>
-      <div style="background:var(--bg);padding:8px 10px;border-radius:6px;font-size:12px;margin-top:6px">
-        • 800g 프레스 기준 배합: <b>${p.grainRatio || ''}</b> + <b>${p.mungRatio || ''}</b><br>
-        • 녹두 처리 방식: <b>${safeMungMethod}</b>
-      </div>
-    </div>
-
-    <div class="card">
-      <b>⚖️ 실제 투입 계량표 (건조 원료 합계: ${totalDry}g)</b>
-      <table style="margin-top:8px">
-        <tr><th>구분</th><th>원료명</th><th>투입량(g)</th><th>지분율(%)</th></tr>
-        ${grains.map(g => `
-          <tr><td>주곡물</td><td>${esc(g.name)}</td><td>${g.amt}g</td><td>${f(g.amt/totalDry*100, 1)}%</td></tr>
-        `).join('')}
-        <tr>
-          <td style="color:var(--sub);font-weight:600">녹두</td>
-          <td>${esc(mung.name)}</td>
-          <td>${mung.amt}g</td>
-          <td>${f(mung.amt/totalDry*100, 1)}%</td>
-        </tr>
-      </table>
-
-      <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--line)">
-        <b>💧 반죽 수분 투입량 (예비실험 측정치)</b>
-        <div class="row no-export" style="margin-top:6px">
-          <div>
-            <label>가수량 (물 / 즙액 mL)</label>
-            <input id="pt_water" type="number" value="${rc.water || 0}">
-          </div>
-          <div>
-            <label>반죽 비고 (되음, 끈기 등)</label>
-            <input id="pt_note" value="${esc(rc.note || '')}" placeholder="예: 반죽 되기 적당함">
-          </div>
-          <div style="flex:0 0 auto">
-            <button type="button" class="p" onclick="appSaveProtocolWater()">저장</button>
-          </div>
-        </div>
-        <div class="mute" style="font-size:12px;margin-top:4px">
-          * 현재 건조 원료 대비 가수율: <b>${f((rc.water||0)/totalDry*100, 1)}%</b>
+    return `
+      <div class="card" style="border-left: 4px solid var(--acc)">
+        <div style="font-size:13px;color:var(--mute);margin-bottom:4px">고조리서 근거 문헌</div>
+        <div style="font-size:16px;font-weight:700;">${esc(b.textName)} <span style="font-size:13px;font-weight:400;color:var(--mute)">(${p.year || ''})</span></div>
+        <div style="background:var(--bg);padding:8px 10px;border-radius:6px;font-size:12.5px;margin-top:8px">
+          • 주재료: <b>${p.grainRatio || ''}</b><br>
+          • 부재료: <b>${p.mungRatio || ''}</b><br>
+          • 녹두처리: <b style="color:var(--sub)">${mung.method || ''}</b>
         </div>
       </div>
-    </div>
-  `;
-}
 
-function labJournalView(b){
-  const sortedLogs = (b.logs || []).slice().sort((x, y) => y.d.localeCompare(x.d));
-  return `
-    <div class="card">
-      <b>🌡 배양실 환경 모니터링 추이</b>
-      <div style="margin-top:6px">${chart(b)}</div>
-    </div>
+      <div class="card">
+        <b>⚖️ 실험실 투입 계량표 (800g 프레스 기준)</b>
+        <table style="margin-top:8px">
+          <tr><th>구분</th><th>원료명</th><th>투입량(g)</th><th>지분율(%)</th></tr>
+          ${grains.map(g => `
+            <tr><td>주곡물</td><td>${esc(g.name)}</td><td>${g.amt}g</td><td>${f(g.amt/totalDry*100, 1)}%</td></tr>
+          `).join('')}
+          <tr>
+            <td style="color:var(--sub);font-weight:600">녹두</td>
+            <td>${esc(mung.name)}</td>
+            <td>${mung.amt}g</td>
+            <td>${f(mung.amt/totalDry*100, 1)}%</td>
+          </tr>
+        </table>
 
-    <div class="card no-export" id="log-input-card">
-      <b>📝 배양 환경 측정 기록</b>
-      <div class="row">
-        <div><label>측정일자</label><input id="l_d" type="date" value="${today()}"></div>
-        <div><label>품온(°C)</label><input id="l_temp" type="number" step="0.1" placeholder="내부"></div>
-        <div><label>실온(°C)</label><input id="l_room" type="number" step="0.1" placeholder="배양실"></div>
-        <div><label>습도(%)</label><input id="l_hum" type="number" step="1" placeholder="RH%"></div>
-      </div>
-      <label style="display:flex;gap:6px;align-items:center;margin:8px 0">
-        <input id="l_vent" type="checkbox" style="width:auto"> 🌀 환기 및 상하 반전(뒤집기) 실시
-      </label>
-      <label>📸 균사 형성 및 누룩 표면 사진</label>
-      <input id="l_file" type="file" accept="image/*" onchange="appHandleImgUpload(event)">
-      <input id="l_img_data" type="hidden">
-      <div id="img_preview_box" style="margin-top:4px"></div>
-      <label style="margin-top:6px">특이사항 (곰팡이 균사 색조, 취기, 포대 개폐)</label>
-      <textarea id="l_note" rows="2" placeholder="예: 백색 및 황색 균사 발생, 누룩 고유의 향미"></textarea>
-      <button type="button" class="p" style="width:100%;margin-top:10px" onclick="appAddLabLog()">기록 저장</button>
-    </div>
-
-    <div class="card">
-      <b>📜 일자별 배양 일지</b>
-      ${sortedLogs.length ? sortedLogs.map(l => `
-        <div class="log">
-          <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--line)">
+          <b>💧 반죽 수분 투입량 (통제 변수)</b>
+          <div class="row no-export" style="margin-top:6px">
             <div>
-              <b>${l.d}</b> <span class="mute">D+${dayN(b.makeDate, l.d)}</span>${l.vent ? '<span class="tag rep">🌀 반전/환기</span>' : ''}
+              <label>물 또는 즙액 (mL)</label>
+              <input id="pt_water" type="number" value="${rc.water || 0}">
             </div>
-            <div class="no-export">
-              <button type="button" class="edit-btn" onclick="appEditLabLog('${l.d}')">수정</button>
-              <button type="button" class="g" style="color:#d9534f" onclick="appDelLabLog('${l.d}')">삭제</button>
+            <div>
+              <label>반죽 상태 메모</label>
+              <input id="pt_note" value="${esc(rc.note || '')}" placeholder="예: 반죽 되기 적당함">
+            </div>
+            <div style="flex:0 0 auto">
+              <button type="button" class="p" onclick="appSaveProtocolWater()">저장</button>
             </div>
           </div>
-          <div class="mute" style="margin:4px 0 2px">
-            품온 ${l.temp||'-'}°C · 실온 ${l.room\vert{}\vert{}'-'}°C · 습도 ${l.hum||'-'}%
+          <div class="mute" style="font-size:12px;margin-top:4px">
+            * 건조 원료 대비 가수율: <b>${totalDry ? f((rc.water||0)/totalDry*100, 1) : 0}%</b>
           </div>
-          <div>${esc(l.note)}</div>${l.img ? `<img src="${l.img}" class="log-img" alt="누룩 균사 사진">` : ''}
-        </div>
-      `).join('') : '<div class="mute">기록이 없습니다.</div>'}
-    </div>
-  `;
-}
-
-function analysisView(b){
-  const as = b.assay || {};
-  return `
-    <div class="card" style="border-left: 4px solid var(--sub)">
-      <b>🧪 [종속변수] 향온곡 이화학 및 기능성 분석 데이터</b>
-      <div class="mute">효소분석키트, 분광광도계, 비색계 실측치를 기록합니다.</div>
-    </div>
-
-    <div class="card">
-      <h3 style="font-size:14.5px;margin:0 0 6px">1. 당화효소 활성 및 당화력</h3>
-      <div class="row">
-        <div>
-          <label>α-Amylase (U/g)</label>
-          <input id="as_alpha" type="number" step="0.01" value="${as.alphaAmy || ''}">
-        </div>
-        <div>
-          <label>β-Amylase (U/g)</label>
-          <input id="as_beta" type="number" step="0.01" value="${as.betaAmy || ''}">
-        </div>
-        <div>
-          <label>Glucoamylase (U/g)</label>
-          <input id="as_gluco" type="number" step="0.01" value="${as.glucoAmy || ''}">
         </div>
       </div>
-      <div class="row" style="margin-top:6px">
-        <div>
-          <label>당화력 (SP / g)</label>
-          <input id="as_sp" type="number" step="1" value="${as.spVal || ''}" placeholder="요오드/메틸렌블루">
+    `;
+  }
+
+  function labJournalView(b){
+    const sortedLogs = (b.logs || []).slice().sort((x, y) => y.d.localeCompare(x.d));
+    return `
+      <div class="card">
+        <b>🌡 배양실 환경 모니터링 (30~37℃)</b>
+        <div style="margin-top:6px">${chart(b)}</div>
+      </div>
+
+      <div class="card no-export" id="log-input-card">
+        <b>📝 일일 환경 측정 기록</b>
+        <div class="row">
+          <div><label>측정일자</label><input id="l_d" type="date" value="${today()}"></div>
+          <div><label>품온(°C)</label><input id="l_temp" type="number" step="0.1" placeholder="내부"></div>
+          <div><label>실온(°C)</label><input id="l_room" type="number" step="0.1" placeholder="배양실"></div>
+          <div><label>습도(%)</label><input id="l_hum" type="number" step="1" placeholder="RH%"></div>
+        </div>
+        <label style="display:flex;gap:6px;align-items:center;margin:8px 0">
+          <input id="l_vent" type="checkbox" style="width:auto"> 🌀 환기 및 상하 반전(뒤집기) 실시
+        </label>
+        <label>📸 누룩 균사 표면 사진</label>
+        <input id="l_file" type="file" accept="image/*" onchange="appHandleImgUpload(event)">
+        <input id="l_img_data" type="hidden">
+        <div id="img_preview_box" style="margin-top:4px"></div>
+        <label style="margin-top:6px">관찰 메모 (색상, 취기 등)</label>
+        <textarea id="l_note" rows="2" placeholder="예: 백색 균사 고르게 착생됨"></textarea>
+        <button type="button" class="p" style="width:100%;margin-top:10px" onclick="appAddLabLog()">기록 저장</button>
+      </div>
+
+      <div class="card">
+        <b>📜 측정 기록 내역</b>
+        ${sortedLogs.length ? sortedLogs.map(l => `
+          <div class="log">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <b>${l.d}</b> <span class="mute">D+${dayN(b.makeDate, l.d)}</span>${l.vent ? '<span class="tag rep">🌀 반전/환기</span>' : ''}
+              </div>
+              <div class="no-export">
+                <button type="button" class="edit-btn" onclick="appEditLabLog('${l.d}')">수정</button>
+                <button type="button" class="g" style="color:#d9534f" onclick="appDelLabLog('${l.d}')">삭제</button>
+              </div>
+            </div>
+            <div class="mute" style="margin:4px 0 2px">
+              품온 ${l.temp||'-'}°C · 실온 ${l.room||'-'}°C · 습도 ${l.hum||'-'}%
+            </div>
+            <div>${esc(l.note)}</div>${l.img ? `<img src="${l.img}" class="log-img">` : ''}
+          </div>
+        `).join('') : '<div class="mute">기록이 없습니다.</div>'}
+      </div>
+    `;
+  }
+
+  function analysisView(b){
+    const as = b.assay || {};
+    return `
+      <div class="card" style="border-left: 4px solid var(--sub)">
+        <b>🧪 [종속변수] 이화학 및 기능성 분석 실측치</b>
+        <div class="mute" style="font-size:12px;margin-top:4px">통계 분석 시 종속변수로 활용될 핵심 수치를 기록합니다.</div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:14.5px;margin:0 0 6px">1. 당화효소 활성 및 당화력</h3>
+        <div class="row">
+          <div><label>α-Amylase (U/g)</label><input id="as_alpha" type="number" step="0.01" value="${as.alphaAmy || ''}"></div>
+          <div><label>β-Amylase (U/g)</label><input id="as_beta" type="number" step="0.01" value="${as.betaAmy || ''}"></div>
+          <div><label>Glucoamylase (U/g)</label><input id="as_gluco" type="number" step="0.01" value="${as.glucoAmy || ''}"></div>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <div><label>당화력 (SP/g)</label><input id="as_sp" type="number" step="0.1" value="${as.spVal || ''}"></div>
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <h3 style="font-size:14.5px;margin:0 0 6px">2. 기초 이화학 특성</h3>
-      <div class="row">
-        <div>
-          <label>수분함량 (%)</label>
-          <input id="as_moist" type="number" step="0.01" value="${as.moisture || ''}">
+      <div class="card">
+        <h3 style="font-size:14.5px;margin:0 0 6px">2. 기초 이화학 품질</h3>
+        <div class="row">
+          <div><label>수분함량 (%)</label><input id="as_moist" type="number" step="0.01" value="${as.moisture || ''}"></div>
+          <div><label>pH</label><input id="as_ph" type="number" step="0.01" value="${as.ph || ''}"></div>
+          <div><label>총산도 (%)</label><input id="as_ta" type="number" step="0.01" value="${as.totalAcid || ''}"></div>
         </div>
-        <div>
-          <label>pH</label>
-          <input id="as_ph" type="number" step="0.01" value="${as.ph || ''}">
-        </div>
-        <div>
-          <label>총산도 (%)</label>
-          <input id="as_ta" type="number" step="0.01" value="${as.totalAcid || ''}">
+        <div class="row" style="margin-top:6px">
+          <div><label>색도 L* (명도)</label><input id="as_l" type="number" step="0.01" value="${as.colorL || ''}"></div>
+          <div><label>색도 a* (적색도)</label><input id="as_a" type="number" step="0.01" value="${as.colorA || ''}"></div>
+          <div><label>색도 b* (황색도)</label><input id="as_b" type="number" step="0.01" value="${as.colorB || ''}"></div>
         </div>
       </div>
-      <div class="row" style="margin-top:6px">
-        <div>
-          <label>색도 L* (명도)</label>
-          <input id="as_l" type="number" step="0.01" value="${as.colorL || ''}">
+
+      <div class="card">
+        <h3 style="font-size:14.5px;margin:0 0 6px">3. 항산화 활성</h3>
+        <div class="row">
+          <div><label>총 폴리페놀 (mg/g)</label><input id="as_poly" type="number" step="0.01" value="${as.polyphenol || ''}"></div>
+          <div><label>DPPH 소거능 (%)</label><input id="as_dpph" type="number" step="0.01" value="${as.dpph || ''}"></div>
         </div>
-        <div>
-          <label>색도 a* (적색도)</label>
-          <input id="as_a" type="number" step="0.01" value="${as.colorA || ''}">
-        </div>
-        <div>
-          <label>색도 b* (황색도)</label>
-          <input id="as_b" type="number" step="0.01" value="${as.colorB || ''}">
-        </div>
+        <button type="button" class="p no-export" style="width:100%;margin-top:14px" onclick="appSaveAssay()">분석 수치 저장</button>
       </div>
-    </div>
+    `;
+  }
 
-    <div class="card">
-      <h3 style="font-size:14.5px;margin:0 0 6px">3. 항산화 활성</h3>
-      <div class="row">
-        <div>
-          <label>총 폴리페놀 (mg GAE/g)</label>
-          <input id="as_poly" type="number" step="0.01" value="${as.polyphenol || ''}">
+  window.render = function(){
+    const a = $('#app');
+    if(!a) return;
+
+    if(view.page === 'home'){
+      const bookCards = Object.keys(PRESETS).map(k => {
+        const p = PRESETS[k];
+        return `
+          <details class="card book-card" style="padding:12px 14px">
+            <summary style="cursor:pointer;font-weight:600;font-size:14.5px">📘 ${k} <span class="mute">(${p.year})</span></summary>
+            <div style="margin-top:8px;font-size:12.5px">
+              <div class="mute" style="margin-bottom:6px">저자: ${p.author}</div>
+              <div style="background:var(--bg);padding:8px 10px;border-radius:6px">
+                • 기본배합: <b>${p.grainRatio}</b> + <b>${p.mungRatio}</b><br>
+                • 녹두방식: <b>${p.mung.method || ''}</b>
+              </div>
+              <div class="mute" style="margin-top:6px">${p.desc}</div>
+            </div>
+          </details>`;
+      }).join('');
+
+      const expCards = db.slice().sort((x, y) => y.id - x.id).map(b => {
+        const as = b.assay || {};
+        return `
+          <div class="card clickable" onclick="appGoDetail(${b.id})">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <b style="font-size:14.5px">${esc(b.title || (b.textName + ' ' + b.rep))}</b>
+              <span class="tag d">${esc(b.status)}</span>
+            </div>
+            <div style="margin-top:6px">
+              <span class="tag">${esc(b.textName)}</span><span class="tag rep">${esc(b.rep)}</span>
+              <span class="mute" style="font-size:12px">제조: ${b.makeDate}</span>
+            </div>
+            <div style="margin-top:6px;font-size:12.5px;color:var(--mute)">
+              당화력(SP): <b style="color:var(--ink)">${as.spVal ? as.spVal : '-'}</b> ·
+              α-아밀라아제: <b style="color:var(--ink)">${as.alphaAmy ? as.alphaAmy : '-'}</b>
+            </div>
+          </div>`;
+      }).join('');
+
+      a.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+          <div>
+            <h1 style="margin:0">🏛️ 향온곡 연구 데이터랩</h1>
+            <div class="sub">고조리서 문헌 기반 재현 및 품질특성 비교</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button type="button" class="excel-btn" onclick="appExportSPSSExcel()">📊 SPSS 엑셀(.xlsx)</button>
+            <button type="button" class="g" style="border:1px solid var(--line); font-size:12px; padding:6px 8px;" onclick="appExportBackup()">💾 백업</button>
+            <button type="button" class="g" style="border:1px solid var(--line); font-size:12px; padding:6px 8px;" onclick="appTriggerImport()">📥 복원</button>
+          </div>
         </div>
-        <div>
-          <label>DPPH 소거활성 (%)</label>
-          <input id="as_dpph" type="number" step="0.01" value="${as.dpph || ''}">
+
+        <button type="button" class="p" style="width:100%;margin-bottom:16px" onclick="appGoNew()">+ 새 실험 시작</button>
+
+        <h2 style="font-size:15px;margin-bottom:8px">🧫 내 실험 목록 (${db.length}건)</h2>
+        ${expCards || '<div class="mute" style="text-align:center;padding:20px 0;">등록된 실험이 없습니다.</div>'}
+
+        <h2 style="margin-top:22px;margin-bottom:8px;font-size:15px">📚 고조리서 문헌 (눌러서 펼치기)</h2>
+        ${bookCards}
+      `;
+    }
+    else if(view.page === 'new'){
+      a.innerHTML = `
+        <button type="button" class="g" style="margin-bottom:10px" onclick="appGoHome()">← 뒤로</button>
+        <h2>새 실험 등록</h2>
+        <div class="card">
+          <label>실험명 (선택)</label>
+          <input id="f_title" placeholder="예: 1차 배양 비교실험">
+          <label>참고한 고조리서</label>
+          <select id="f_book">
+            ${Object.keys(PRESETS).map(k => `<option value="${k}">${k} (${PRESETS[k].year})</option>`).join('')}
+          </select>
+          <label>실험 반복 차수 (Replication)</label>
+          <select id="f_rep">
+            <option value="Rep 1">Rep 1 (1차 반복실험)</option>
+            <option value="Rep 2">Rep 2 (2차 반복실험)</option>
+            <option value="Rep 3">Rep 3 (3차 반복실험)</option>
+            <option value="Rep 4">Rep 4 (예비/추가)</option>
+          </select>
+          <label>제조(반죽) 일자</label>
+          <input id="f_date" type="date" value="${today()}">
+          <button type="button" class="p" style="width:100%;margin-top:14px" onclick="appCreateSample()">배합표 생성 및 실험 시작</button>
         </div>
-      </div>
-      <button type="button" class="p no-export" style="width:100%;margin-top:14px" onclick="appSaveAssay()">분석 데이터 저장</button>
-    </div>
-  `;
-}
+      `;
+    }
+    else if(view.page === 'detail'){
+      const b = cur();
+      if(!b) return appGoHome();
 
-function render(){
-  const a = $('#app');
-  if(!a) return;
+      a.innerHTML = `
+        <div id="export-top-bar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <button type="button" class="g" style="padding:4px 0" onclick="appGoHome()">← 목록으로</button>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="p" style="font-size:12px;padding:6px 10px;background:var(--sub);border-color:var(--sub);" onclick="appExportReportImage()">🖼️ 이미지</button>
+            <button type="button" class="p" style="font-size:12px;padding:6px 10px;background:var(--sub);border-color:var(--sub);" onclick="appExportReportPDF()">📄 PDF</button>
+          </div>
+        </div>
 
-  if(view.page === 'list'){
-    const batchCards = db.slice().sort((x, y) => y.id - x.id).map(b => {
-      const p = PRESETS[b.textName] || {};
-      const as = b.assay || {};
-      return `
-        <div class="card clickable" onclick="appGo('detail', ${b.id})">
+        <div id="capture-area">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
               <span class="tag">${esc(b.textName)}</span>
-              <span class="tag rep">${esc(b.rep || 'Rep 1')}</span>
-              <span class="tag d">${esc(b.status || '제조중')}</span>
+              <span class="tag rep">${esc(b.rep)}</span>
             </div>
-            <span class="mute" style="font-size:12px">D+${dayN(b.makeDate)}</span>
+            <select class="no-export" onchange="appSetStatus(this.value)" style="width:auto;padding:3px 6px">
+              ${['제조중','배양중','건조중','분석완료'].map(s => `<option ${s === b.status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
           </div>
-          <h3 style="margin:6px 0 2px;font-size:15px">${esc(b.textName)} (${esc(b.rep)})</h3>
-          <div class="mute" style="font-size:12px">
-            원료 배합: ${p.grainRatio || '-'} + ${p.mungRatio || '-'}
+          <h1 style="margin:6px 0 4px">${esc(b.title || b.textName)} <span style="font-size:16px;color:var(--mute)">(${esc(b.rep)})</span></h1>
+          <div class="mute" style="font-size:12px">제조일: ${b.makeDate} (D+${dayN(b.makeDate)})</div>
+
+          <div class="tabs no-export">
+            <button type="button" class="${view.tab === 'protocol' ? 'on' : ''}" onclick="appTab('protocol')">📜 배합표</button>
+            <button type="button" class="${view.tab === 'journal' ? 'on' : ''}" onclick="appTab('journal')">🌡 배양일지</button>
+            <button type="button" class="${view.tab === 'analysis' ? 'on' : ''}" onclick="appTab('analysis')">🧪 분석결과</button>
           </div>
-          <div class="mute" style="font-size:12px;margin-top:4px">
-            당화력(SP): <b>${as.spVal ? as.spVal + ' SP/g' : '미측정'}</b> · 
-            α-아밀라아제: <b>${as.alphaAmy ? as.alphaAmy + ' U/g' : '미측정'}</b>
-          </div>
+
+          ${view.tab === 'protocol' ? protocolView(b) : view.tab === 'journal' ? labJournalView(b) : analysisView(b)}
+        </div>
+
+        <div class="no-export" style="text-align:right;margin-top:14px">
+          <button type="button" class="g" style="color:#d9534f" onclick="appDelSample()">이 실험군 삭제</button>
         </div>
       `;
-    }).join('');
-
-    a.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-        <div>
-          <h1 style="margin:0">🏛️ 향온곡 박사논문 데이터랩</h1>
-          <div class="sub">고조리서 제조법 재현 및 품질특성 비교 연구</div>
-        </div>
-        <div style="display:flex;gap:4px">
-          <button type="button" class="excel-btn" onclick="appExportSPSSExcel()">📊 SPSS 엑셀(.xlsx)</button>
-          <button type="button" class="g" style="border:1px solid var(--line); font-size: 12px; padding: 6px 8px;" onclick="appExportBackup()">💾 백업</button>
-          <button type="button" class="g" style="border:1px solid var(--line); font-size: 12px; padding: 6px 8px;" onclick="appTriggerImport()">📥 복원</button>
-        </div>
-      </div>
-
-      <button type="button" class="p" style="width:100%;margin:12px 0 16px" onclick="appGo('new')">+ 새 실험군(시료) 등록</button>
-      ${batchCards || '<div class="card mute">등록된 실험군이 없습니다.</div>'}
-    `;
-  }
-  else if(view.page === 'new'){
-    a.innerHTML = `
-      <button type="button" class="g" onclick="appGo('list')">← 목록으로</button>
-      <h2>새 실험군(시료) 등록</h2>
-      <div class="card">
-        <label>조리서 시험군 선택</label>
-        <select id="f_text" onchange="appPreviewPreset(this.value)">
-          ${Object.keys(PRESETS).map(k => `<option value="${k}">${k} (${PRESETS[k].author})</option>`).join('')}
-        </select>
-
-        <div id="preset_preview" style="background:var(--bg);padding:8px 10px;border-radius:6px;font-size:12px;margin:8px 0"></div>
-
-        <label>실험 반복 차수 (Replication)</label>
-        <select id="f_rep">
-          <option value="Rep 1">Rep 1 (1차 반복)</option>
-          <option value="Rep 2">Rep 2 (2차 반복)</option>
-          <option value="Rep 3">Rep 3 (3차 반복)</option>
-          <option value="Rep 4">Rep 4 (예비/추가)</option>
-        </select>
-
-        <label>제조 및 성형 일자</label>
-        <input id="f_date" type="date" value="${today()}">
-
-        <button type="button" class="p" style="width:100%;margin-top:14px" onclick="appCreateSample()">실험군 생성 및 배합표 적용</button>
-      </div>
-    `;
-    window.appPreviewPreset(Object.keys(PRESETS)[0]);
-  }
-  else {
-    const b = cur();
-    if(!b) return appGo('list');
-
-    a.innerHTML = `
-      <div id="export-top-bar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <button type="button" class="g" onclick="appGo('list')">← 실험 목록</button>
-        <div style="display:flex;gap:6px">
-          <button type="button" class="p" style="font-size:12px;padding:6px 10px;background:var(--sub);border-color:var(--sub);" onclick="appExportReportImage()">🖼️ 리포트 이미지</button>
-          <button type="button" class="p" style="font-size:12px;padding:6px 10px;background:var(--sub);border-color:var(--sub);" onclick="appExportReportPDF()">📄 PDF 출력</button>
-        </div>
-      </div>
-
-      <div id="capture-area">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <span class="tag">${esc(b.textName)}</span>
-            <span class="tag rep">${esc(b.rep)}</span>
-            <span class="mute">제조일: ${b.makeDate} (D+${dayN(b.makeDate)})</span>
-          </div>
-          <select class="no-export" onchange="appSetStatus(this.value)" style="width:auto;padding:3px 6px">
-            ${['제조중','배양중','건조중','분석완료'].map(s => `<option ${s === b.status ? 'selected' : ''}>${s}</option>`).join('')}
-          </select>
-        </div>
-
-        <h1 style="margin:4px 0">${esc(b.textName)} (${esc(b.rep)})</h1>
-
-        <div class="tabs no-export">
-          <button type="button" class="${view.tab === 'protocol' ? 'on' : ''}" onclick="appTab('protocol')">📜 배합 & 성형</button>
-          <button type="button" class="${view.tab === 'journal' ? 'on' : ''}" onclick="appTab('journal')">🌡 배양 환경일지</button>
-          <button type="button" class="${view.tab === 'analysis' ? 'on' : ''}" onclick="appTab('analysis')">🧪 이화학·효소 분석</button>
-        </div>
-
-        ${view.tab === 'protocol' ? protocolView(b) : view.tab === 'journal' ? labJournalView(b) : analysisView(b)}
-      </div>
-
-      <div class="no-export" style="text-align:right;margin-top:14px">
-        <button type="button" class="g" style="color:#d9534f" onclick="appDelSample()">이 실험군 삭제</button>
-      </div>
-    `;
-  }
-}
-
-window.appPreviewPreset = function(k){
-  const p = PRESETS[k];
-  if(!p) return;
-  const el = $('#preset_preview');
-  if(el){
-    el.innerHTML = `
-      • 연대: <b>${p.year}</b> (${p.author})<br>
-      • 800g 기준 배합: <b>${p.grainRatio}</b> + <b>${p.mungRatio}</b><br>
-      • 가공 특징: ${p.desc}
-    `;
-  }
-};
-
-window.appCreateSample = function(){
-  const textName = v('f_text');
-  const rep = v('f_rep');
-  const makeDate = v('f_date') || today();
-  const p = PRESETS[textName];
-
-  const newId = Date.now();
-  db.push({
-    id: newId,
-    textName: textName,
-    rep: rep,
-    makeDate: makeDate,
-    status: '배양중',
-    pressSize: '800g 프레스',
-    recipe: {
-      grains: JSON.parse(JSON.stringify(p.baseGrains)),
-      mung: JSON.parse(JSON.stringify(p.mung)),
-      water: p.recWater || 180,
-      note: ''
-    },
-    logs: [
-      { d: makeDate, temp: 28.0, room: 25.0, hum: 85, vent: false, note: '성형 및 배양실 입실' }
-    ],
-    assay: {
-      alphaAmy: '', betaAmy: '', glucoAmy: '', spVal: '',
-      moisture: '', ph: '', totalAcid: '',
-      colorL: '', colorA: '', colorB: '',
-      polyphenol: '', dpph: ''
     }
-  });
-  saveDB();
-  window.appGo('detail', newId);
-};
-
-window.appSaveProtocolWater = function(){
-  const b = cur();
-  b.recipe.water = +v('pt_water') || 0;
-  b.recipe.note = v('pt_note');
-  saveDB();
-  alert('반죽 수분 투입량이 저장되었습니다.');
-  render();
-};
-
-window.appSaveAssay = function(){
-  const b = cur();
-  b.assay = {
-    alphaAmy: v('as_alpha') !== '' ? +v('as_alpha') : '',
-    betaAmy: v('as_beta') !== '' ? +v('as_beta') : '',
-    glucoAmy: v('as_gluco') !== '' ? +v('as_gluco') : '',
-    spVal: v('as_sp') !== '' ? +v('as_sp') : '',
-    moisture: v('as_moist') !== '' ? +v('as_moist') : '',
-    ph: v('as_ph') !== '' ? +v('as_ph') : '',
-    totalAcid: v('as_ta') !== '' ? +v('as_ta') : '',
-    colorL: v('as_l') !== '' ? +v('as_l') : '',
-    colorA: v('as_a') !== '' ? +v('as_a') : '',
-    colorB: v('as_b') !== '' ? +v('as_b') : '',
-    polyphenol: v('as_poly') !== '' ? +v('as_poly') : '',
-    dpph: v('as_dpph') !== '' ? +v('as_dpph') : ''
   };
-  saveDB();
-  alert('분석 데이터가 저장되었습니다.');
-};
 
-window.appAddLabLog = function(){
-  const b = cur();
-  const dVal = v('l_d');
-  if(!dVal) return alert('측정일자를 입력해 주세요.');
-  b.logs = (b.logs || []).filter(l => l.d !== dVal);
-  b.logs.push({
-    d: dVal, temp: v('l_temp'), room: v('l_room'), hum: v('l_hum'),
-    vent: $('#l_vent') ? $('#l_vent').checked : false,
-    img: v('l_img_data') || '', note: v('l_note')
-  });
-  b.logs.sort((x, y) => x.d.localeCompare(y.d));
-  saveDB();
-  render();
-};
+  window.appGoHome = function() { view.page = 'home'; view.bookKey = null; view.id = null; render(); };
+  window.appGoBook = function() { appGoHome(); };
+  window.appGoNew = function() { view.page = 'new'; view.id = null; render(); };
+  window.appGoDetail = function(id) { view.page = 'detail'; view.id = id; view.tab = 'protocol'; render(); };
+  window.appTab = function(t){ view.tab = t; render(); };
+  window.appSetChartFilter = function(f){ view.chartFilter = f; render(); };
+  window.appSetStatus = function(s){ cur().status = s; saveDB(); render(); };
 
-window.appEditLabLog = function(d){
-  const b = cur();
-  const target = (b.logs || []).find(l => l.d === d);
-  if(!target) return;
-  if($('#l_d')) $('#l_d').value = target.d;
-  if($('#l_temp')) $('#l_temp').value = target.temp;
-  if($('#l_room')) $('#l_room').value = target.room;
-  if($('#l_hum')) $('#l_hum').value = target.hum;
-  if($('#l_vent')) $('#l_vent').checked = !!target.vent;
-  if($('#l_note')) $('#l_note').value = target.note || '';
-  if($('#l_img_data')) $('#l_img_data').value = target.img || '';
-  if($('#img_preview_box')) $('#img_preview_box').innerHTML = target.img ? `<img src="${target.img}" class="log-img">` : '';
-  const el = $('#log-input-card');
-  if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-};
-
-window.appDelLabLog = function(d){
-  if(confirm(`${d} 일지를 삭제하시겠습니까?`)){
-    const b = cur();
-    b.logs = (b.logs || []).filter(l => l.d !== d);
+  window.appCreateSample = function(){
+    const bookKey = v('f_book');
+    const title = v('f_title').trim();
+    const rep = v('f_rep');
+    const makeDate = v('f_date') || today();
+    const p = PRESETS[bookKey];
+    const newId = Date.now();
+    db.push({
+      id: newId, title: title, textName: bookKey, rep: rep, makeDate: makeDate, status: '제조중',
+      recipe: {
+        grains: JSON.parse(JSON.stringify(p.baseGrains)),
+        mung: JSON.parse(JSON.stringify(p.mung)),
+        water: p.recWater || 0, note: ''
+      },
+      logs: [],
+      assay: { alphaAmy: '', betaAmy: '', glucoAmy: '', spVal: '', moisture: '', ph: '', totalAcid: '', colorL: '', colorA: '', colorB: '', polyphenol: '', dpph: '' }
+    });
     saveDB();
-    render();
-  }
-};
-
-window.appHandleImgUpload = function(event){
-  const file = event.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const maxW = 800;
-      const scale = img.width > maxW ? maxW / img.width : 1;
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-      $('#l_img_data').value = dataUrl;
-      $('#img_preview_box').innerHTML = `<img src="${dataUrl}" class="log-img">`;
-    };
-    img.src = e.target.result;
+    window.appGoDetail(newId);
   };
-  reader.readAsDataURL(file);
-};
 
-window.appGo = function(p, id){
-  view.page = p; view.id = id || null; view.tab = 'protocol'; render();
-};
-window.appTab = function(t){ view.tab = t; render(); };
-window.appSetChartFilter = function(f){ view.chartFilter = f; render(); };
-window.appSetStatus = function(s){ cur().status = s; saveDB(); render(); };
-window.appDelSample = function(){
-  if(confirm('이 실험군과 관련된 모든 데이터가 삭제됩니다.')){
-    db = db.filter(b => b.id !== view.id);
-    saveDB(); window.appGo('list');
-  }
-};
+  window.appDelSample = function(){
+    if(confirm('이 실험군 데이터를 영구 삭제하시겠습니까?')){
+      db = db.filter(b => b.id !== view.id);
+      saveDB();
+      window.appGoHome();
+    }
+  };
 
-/* SPSS 원클릭 분석용 엑셀 내보내기 (.xlsx) */
-window.appExportSPSSExcel = function(){
-  if(typeof XLSX === 'undefined') return alert('엑셀 모듈 로딩 중입니다.');
-  if(!db || !db.length) return alert('내보낼 데이터가 없습니다.');
+  window.appSaveProtocolWater = function(){
+    const b = cur(); b.recipe.water = +v('pt_water') || 0; b.recipe.note = v('pt_note');
+    saveDB(); alert('저장되었습니다.'); render();
+  };
+  window.appSaveAssay = function(){
+    const b = cur();
+    const n = id => v(id) !== '' ? +v(id) : '';
+    b.assay = {
+      alphaAmy: n('as_alpha'), betaAmy: n('as_beta'), glucoAmy: n('as_gluco'), spVal: n('as_sp'),
+      moisture: n('as_moist'), ph: n('as_ph'), totalAcid: n('as_ta'),
+      colorL: n('as_l'), colorA: n('as_a'), colorB: n('as_b'),
+      polyphenol: n('as_poly'), dpph: n('as_dpph')
+    };
+    saveDB(); alert('분석치가 저장되었습니다.');
+  };
+  window.appAddLabLog = function(){
+    const b = cur(); const dVal = v('l_d');
+    if(!dVal) return alert('날짜를 입력해주세요.');
+    b.logs = (b.logs || []).filter(l => l.d !== dVal);
+    b.logs.push({
+      d: dVal, temp: v('l_temp'), room: v('l_room'), hum: v('l_hum'),
+      vent: $('#l_vent') ? $('#l_vent').checked : false,
+      img: v('l_img_data') || '', note: v('l_note')
+    });
+    b.logs.sort((x, y) => x.d.localeCompare(y.d)); saveDB(); render();
+  };
+  window.appEditLabLog = function(d){
+    const b = cur(); const target = (b.logs || []).find(l => l.d === d); if(!target) return;
+    if($('#l_d')) $('#l_d').value = target.d;
+    if($('#l_temp')) $('#l_temp').value = target.temp;
+    if($('#l_room')) $('#l_room').value = target.room;
+    if($('#l_hum')) $('#l_hum').value = target.hum;
+    if($('#l_vent')) $('#l_vent').checked = !!target.vent;
+    if($('#l_note')) $('#l_note').value = target.note || '';
+    if($('#l_img_data')) $('#l_img_data').value = target.img || '';
+    if($('#img_preview_box')) $('#img_preview_box').innerHTML = target.img ? `<img src="${target.img}" class="log-img">` : '';
+    const el = $('#log-input-card'); if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  window.appDelLabLog = function(d){
+    if(confirm(`${d} 기록을 삭제하시겠습니까?`)){ const b = cur(); b.logs = (b.logs || []).filter(l => l.d !== d); saveDB(); render(); }
+  };
+  window.appHandleImgUpload = function(event){
+    const file = event.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 800; const scale = img.width > maxW ? maxW / img.width : 1;
+        canvas.width = img.width * scale; canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        $('#l_img_data').value = dataUrl; $('#img_preview_box').innerHTML = `<img src="${dataUrl}" class="log-img">`;
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
-  const wb = XLSX.utils.book_new();
+  window.appExportSPSSExcel = function(){
+    if(typeof XLSX === 'undefined') return alert('엑셀 모듈 로딩 중입니다.');
+    if(!db || !db.length) return alert('내보낼 데이터가 없습니다.');
+    const wb = XLSX.utils.book_new();
 
-  const spssHeaders = [
-    'ID', 'Literature_Group', 'Replication', 'Main_Grain', 'Mung_Processing',
-    'Grain_Amt_g', 'Mung_Amt_g', 'Water_Amt_mL',
-    'Alpha_Amylase_Ug', 'Beta_Amylase_Ug', 'Glucoamylase_Ug', 'SP_val_SPg',
-    'Moisture_pct', 'pH', 'Total_Acid_pct', 'Color_L', 'Color_a', 'Color_b',
-    'Polyphenol_mgGAEg', 'DPPH_pct'
-  ];
-
-  const spssData = [spssHeaders];
-  db.forEach(b => {
-    const rc = b.recipe || {};
-    const as = b.assay || {};
-    const p = PRESETS[b.textName] || {};
-
-    spssData.push([
-      b.id, b.textName, b.rep, p.grainRatio || '', (rc.mung && rc.mung.method) ? rc.mung.method : '',
-      (rc.grains||[]).reduce((a,g)=>a+(+g.amt||0),0), (rc.mung && rc.mung.amt) ? rc.mung.amt : '', rc.water || '',
-      as.alphaAmy !== '' ? as.alphaAmy : '', as.betaAmy !== '' ? as.betaAmy : '',
-      as.glucoAmy !== '' ? as.glucoAmy : '', as.spVal !== '' ? as.spVal : '',
-      as.moisture !== '' ? as.moisture : '', as.ph !== '' ? as.ph : '',
-      as.totalAcid !== '' ? as.totalAcid : '', as.colorL !== '' ? as.colorL : '',
-      as.colorA !== '' ? as.colorA : '', as.colorB !== '' ? as.colorB : '',
-      as.polyphenol !== '' ? as.polyphenol : '', as.dpph !== '' ? as.dpph : ''
-    ]);
-  });
-
-  const wsSPSS = XLSX.utils.aoa_to_sheet(spssData);
-  XLSX.utils.book_append_sheet(wb, wsSPSS, 'SPSS_입력용_RawData');
-
-  const logHeaders = ['ID', 'Literature_Group', 'Replication', 'Date', 'Day_N', 'Temp_Inside', 'Temp_Room', 'Humidity_RH', 'Ventilation', 'Notes'];
-  const logData = [logHeaders];
-  db.forEach(b => {
-    (b.logs || []).forEach(l => {
-      logData.push([
-        b.id, b.textName, b.rep, l.d, dayN(b.makeDate, l.d),
-        l.temp || '', l.room || '', l.hum || '', l.vent ? 'Y' : 'N', l.note || ''
+    const spssHeaders = [
+      'ID', 'Literature_Group', 'Replication', 'Main_Grain', 'Mung_Processing',
+      'Grain_Amt_g', 'Mung_Amt_g', 'Water_Amt_mL',
+      'Alpha_Amylase_Ug', 'Beta_Amylase_Ug', 'Glucoamylase_Ug', 'SP_val_SPg',
+      'Moisture_pct', 'pH', 'Total_Acid_pct', 'Color_L', 'Color_a', 'Color_b',
+      'Polyphenol_mgGAEg', 'DPPH_pct'
+    ];
+    const spssData = [spssHeaders];
+    db.forEach(b => {
+      const rc = b.recipe || {}; const as = b.assay || {}; const p = PRESETS[b.textName] || {};
+      spssData.push([
+        b.id, b.textName, b.rep, p.grainRatio || '', (rc.mung && rc.mung.method) ? rc.mung.method : '',
+        (rc.grains||[]).reduce((a,g)=>a+(+g.amt||0),0), (rc.mung && rc.mung.amt) ? rc.mung.amt : '', rc.water || '',
+        as.alphaAmy !== '' ? as.alphaAmy : '', as.betaAmy !== '' ? as.betaAmy : '',
+        as.glucoAmy !== '' ? as.glucoAmy : '', as.spVal !== '' ? as.spVal : '',
+        as.moisture !== '' ? as.moisture : '', as.ph !== '' ? as.ph : '',
+        as.totalAcid !== '' ? as.totalAcid : '', as.colorL !== '' ? as.colorL : '',
+        as.colorA !== '' ? as.colorA : '', as.colorB !== '' ? as.colorB : '',
+        as.polyphenol !== '' ? as.polyphenol : '', as.dpph !== '' ? as.dpph : ''
       ]);
     });
-  });
-  const wsLogs = XLSX.utils.aoa_to_sheet(logData);
-  XLSX.utils.book_append_sheet(wb, wsLogs, '배양환경_일일모니터링');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(spssData), 'SPSS_RawData');
 
-  XLSX.writeFile(wb, `향온곡_박사논문_실험데이터_${today()}.xlsx`);
-};
+    const logHeaders = ['ID', 'Literature_Group', 'Replication', 'Date', 'Day_N', 'Temp_Inside', 'Temp_Room', 'Humidity_RH', 'Ventilation', 'Notes'];
+    const logData = [logHeaders];
+    db.forEach(b => {
+      (b.logs || []).forEach(l => {
+        logData.push([ b.id, b.textName, b.rep, l.d, dayN(b.makeDate, l.d), l.temp || '', l.room || '', l.hum || '', l.vent ? 'Y' : 'N', l.note || '' ]);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logData), '배양일지_Raw');
 
-/* 이미지 및 PDF 리포트 내보내기 */
-window.appExportReportImage = async function(){
-  const b = cur(); if(!b) return;
-  const area = $('#capture-area');
-  const loading = $('#capture-loading');
-  loading.style.display = 'flex';
-  area.classList.add('export-mode');
-  const noExports = area.querySelectorAll('.no-export');
-  noExports.forEach(el => el.style.display = 'none');
-
-  try {
-    await new Promise(r => setTimeout(r, 60));
-    const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#f4f6f8' });
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = `${b.textName}_${b.rep}_연구리포트.png`;
-    link.click();
-  } catch(e){ alert('이미지 생성 오류'); } finally {
-    area.classList.remove('export-mode');
-    noExports.forEach(el => el.style.display = '');
-    loading.style.display = 'none';
-  }
-};
-
-window.appExportReportPDF = async function(){
-  const b = cur(); if(!b) return;
-  const area = $('#capture-area');
-  const loading = $('#capture-loading');
-  loading.style.display = 'flex';
-  area.classList.add('export-mode');
-  const noExports = area.querySelectorAll('.no-export');
-  noExports.forEach(el => el.style.display = 'none');
-
-  try {
-    await new Promise(r => setTimeout(r, 60));
-    const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#ffffff' });
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    pdf.addImage(imgData, 'JPEG', 10, 10, 190, (canvas.height * 190) / canvas.width);
-    pdf.save(`${b.textName}_${b.rep}_연구리포트.pdf`);
-  } catch(e){ alert('PDF 생성 오류'); } finally {
-    area.classList.remove('export-mode');
-    noExports.forEach(el => el.style.display = '');
-    loading.style.display = 'none';
-  }
-};
-
-window.appExportBackup = function(){
-  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `향온곡_논문데이터_백업_${today()}.json`;
-  link.click();
-};
-
-window.appTriggerImport = function(){ $('#backup-file-input').click(); };
-window.appImportBackupFile = function(e){
-  const file = e.target.files[0]; if(!file) return;
-  const r = new FileReader();
-  r.onload = ev => {
-    try {
-      db = JSON.parse(ev.target.result); saveDB(); render();
-      alert('논문 데이터가 성공적으로 복원되었습니다.');
-    } catch(err){ alert('복원 실패: ' + err.message); }
+    XLSX.writeFile(wb, `향온곡_논문통계용_데이터_${today()}.xlsx`);
   };
-  r.readAsText(file);
-  e.target.value = '';
-};
 
-render();
+  window.appExportReportImage = async function(){
+    const b = cur(); if(!b) return;
+    const area = $('#capture-area'); const loading = $('#capture-loading');
+    loading.style.display = 'flex'; area.classList.add('export-mode');
+    area.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
+    try {
+      await new Promise(r => setTimeout(r, 60));
+      const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#f4f6f8' });
+      const link = document.createElement('a'); link.href = canvas.toDataURL('image/png');
+      link.download = `${b.textName}_${b.rep}_리포트.png`; link.click();
+    } finally {
+      area.classList.remove('export-mode');
+      area.querySelectorAll('.no-export').forEach(el => el.style.display = ''); loading.style.display = 'none';
+    }
+  };
+
+  window.appExportReportPDF = async function(){
+    const b = cur(); if(!b) return;
+    const area = $('#capture-area'); const loading = $('#capture-loading');
+    loading.style.display = 'flex'; area.classList.add('export-mode');
+    area.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
+    try {
+      await new Promise(r => setTimeout(r, 60));
+      const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4');
+      pdf.addImage(imgData, 'JPEG', 10, 10, 190, (canvas.height * 190) / canvas.width);
+      pdf.save(`${b.textName}_${b.rep}_리포트.pdf`);
+    } finally {
+      area.classList.remove('export-mode');
+      area.querySelectorAll('.no-export').forEach(el => el.style.display = ''); loading.style.display = 'none';
+    }
+  };
+
+  window.appExportBackup = function(){
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }));
+    link.download = `향온곡_논문데이터_백업_${today()}.json`; link.click();
+  };
+  window.appTriggerImport = function(){ $('#backup-file-input').click(); };
+  window.appImportBackupFile = function(e){
+    const file = e.target.files[0]; if(!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if(!Array.isArray(parsed)) throw new Error('형식 오류');
+        db = parsed; saveDB(); appGoHome(); alert('데이터가 복원되었습니다.');
+      } catch(err){ alert('복원 실패'); }
+    };
+    r.readAsText(file); e.target.value = '';
+  };
+
+  render();
+
+} catch (err) {
+  const app = document.getElementById('app');
+  if(app) app.innerHTML = `<div style="padding:20px; color:red;"><b>실행 실패:</b><br>${err.message}</div>`;
+}
 </script>
 </body>
 </html>
